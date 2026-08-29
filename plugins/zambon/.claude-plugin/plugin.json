@@ -1,0 +1,12 @@
+{
+  "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
+  "name": "zambon",
+  "description": "Personal skill collection: authoring helpers plus day-to-day skills.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Ricardo Zambon"
+  },
+  "homepage": "https://github.com/RicardoZambon/skills",
+  "repository": "https://github.com/RicardoZambon/skills",
+  "license": "MIT"
+}
