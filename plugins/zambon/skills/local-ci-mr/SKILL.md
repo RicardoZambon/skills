@@ -86,5 +86,11 @@ The four suspended jobs are `test`, `lifecycle-e2e`, `fidelity-gate` and `spread
   never as a pass.
 - An `UNMAPPED` CI job always fails the run. That's drift between `.gitlab-ci.yml` and
   `$ciJobCoverage` in the script. Report it; don't work around it.
+- Docker must be logged in to `registry.gitlab.com`. Step 1 pulls
+  `aresprism/microservices/project-management/project-api:latest`. Without the login it fails in
+  about 2 minutes with `denied: access forbidden`, and none of the suspended jobs run. Check first:
+  `docker manifest inspect registry.gitlab.com/aresprism/microservices/project-management/project-api:latest`.
+  If it's denied, ask the user to run `! docker login registry.gitlab.com` (token with
+  `read_registry`). Don't post that failure on the MR; it's an environment problem, not a result.
 - Docker must be running, and ports 5100/15433 must be free. Stale `cost-*` containers from
   another branch are fine because step 2 runs down + up.
