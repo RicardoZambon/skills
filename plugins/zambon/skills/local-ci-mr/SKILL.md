@@ -1,7 +1,7 @@
 ---
 name: local-ci-mr
-description: Check out a cost-management MR branch, run scripts/local-ci.ps1, and record the result as a note on the GitLab MR. Use when the user asks to "run local CI" / "run local-ci" on a branch or MR, "record the local-ci result in the MR", or is about to merge a cost-management MR while the heavy CI jobs are suspended to `when: manual`.
-argument-hint: <branch-name | MR number>
+description: 'Check out a cost-management MR branch, run scripts/local-ci.ps1, and record the result as a note on the GitLab MR. Use when the user asks to "run local CI" / "run local-ci" on a branch or MR, "record the local-ci result in the MR", or is about to merge a cost-management MR while the heavy CI jobs are suspended to `when: manual`.'
+argument-hint: '<branch-name | MR number>'
 allowed-tools: [Bash, Read, Grep, mcp__claude_ai_GitLab__list_merge_requests, mcp__claude_ai_GitLab__get_merge_request, mcp__claude_ai_GitLab__save_note]
 ---
 
