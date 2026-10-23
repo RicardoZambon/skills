@@ -33,6 +33,9 @@ Claude Code auto-loads plugin directories under `~/.claude/skills/`, so the skil
 as `zambon@skills-dir` on the next session start. Don't also install from the marketplace
 on this machine — the same skills would load twice.
 
+On Windows, run it from Git Bash. It makes a directory junction instead of a symlink,
+because Git Bash's `ln -s` quietly copies the folder and edits would never go live.
+
 ### Add a skill
 
 ```bash

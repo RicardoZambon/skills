@@ -1,0 +1,8 @@
+# Scripts run under bash on every platform, including Git Bash on Windows.
+# CRLF breaks them, so keep LF whatever core.autocrlf says.
+*.sh text eol=lf
+*.pl text eol=lf
+plugins/*/hooks/session-start text eol=lf
+
+# The hook wrapper is parsed by both cmd and bash; bash needs LF.
+*.cmd text eol=lf
