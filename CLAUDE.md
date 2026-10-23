@@ -15,5 +15,10 @@ consumed by Claude Code, not built or run — there is no app here.
 - Every plugin listed in `.claude-plugin/marketplace.json` needs a matching
   `plugins/<name>/.claude-plugin/plugin.json`, and the `version` fields must agree if both
   declare one.
+- Hooks live in `plugins/<plugin>/hooks/` and run through `run-hook.cmd`, so they work on
+  Windows too. Keep hook and script files LF (`.gitattributes` enforces it) and make
+  `run-hook.cmd` executable in git (`git add --chmod=+x`).
+- This repo is public. Keep company-specific details (internal URLs, project paths, ticket
+  formats) out of shared files like `rules.md`.
 - Run `scripts/validate.sh` after any change to a manifest or a skill.
 - Bump the plugin `version` when publishing a change other machines should pick up.

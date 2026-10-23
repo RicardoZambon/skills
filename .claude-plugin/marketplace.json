@@ -11,7 +11,7 @@
     {
       "name": "zambon",
       "source": "./plugins/zambon",
-      "description": "Personal skill collection: authoring helpers plus day-to-day skills.",
+      "description": "Personal skill collection: authoring helpers, writing rules loaded into every session, plus day-to-day skills.",
       "author": {
         "name": "Ricardo Zambon"
       },

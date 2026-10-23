@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# SessionStart hook: load the writing rules into every session.
+#
+# Skills load only when a task matches their description, and "write a reply"
+# never does, so rules that must always apply are injected here instead. The
+# writing-style skill reads the same rules.md, so there is one copy to edit.
+#
+# The rules go out as hookSpecificOutput.additionalContext, the same JSON
+# shape obra/superpowers uses. Builtins only ($(<file), printf): a startup
+# hook can run with an empty PATH (anthropics/claude-code#43127).
+
+case "$0" in
+  */*|*\\*) hook_dir="$(cd "${0%[/\\]*}" && pwd)" ;;
+  *) hook_dir="$(pwd)" ;;
+esac
+rules="${hook_dir}/../skills/writing-style/rules.md"
+
+[ -r "$rules" ] || exit 0
+content="$(<"$rules")"
+content="${content//$'\r'/}"    # a Windows checkout may have CRLF
+
+escape_for_json() {
+  local s="$1"
+  s="${s//\\/\\\\}"
+  s="${s//\"/\\\"}"
+  s="${s//$'\n'/\\n}"
+  s="${s//$'\r'/\\r}"
+  s="${s//$'\t'/\\t}"
+  printf '%s' "$s"
+}
+
+json="$(printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"%s"}}' "$(escape_for_json "$content")")"
+
+# On Windows the harness can close stdout before printf finishes, and Git
+# Bash reports that as a write error at every startup. Piping through cat
+# absorbs it (same fix as obra/superpowers#1612).
+if command -v cat >/dev/null 2>&1; then
+  printf '%s\n' "$json" | cat
+else
+  printf '%s\n' "$json"
+fi

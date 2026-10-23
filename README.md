@@ -48,6 +48,19 @@ git add -A && git commit -m "add my-skill" && git push
 Or just ask Claude: `/new-skill my-skill` — the `new-skill` skill in this repo drives the
 same flow and covers what makes a good `description`.
 
+## Writing rules
+
+The plugin loads a short list of writing rules into every session through a SessionStart
+hook. A skill alone can't do this: skills load only when a task matches their description,
+and "write a reply" never does.
+
+- The rules live in `plugins/zambon/skills/writing-style/rules.md`. Edit them there; the
+  hook and the skill both read that file.
+- The `writing-style` skill adds before-and-after examples and a checker script for longer
+  texts (PR descriptions, ADRs, tickets).
+- Keep anything company-specific, like ticket link formats, out of `rules.md`, because this
+  repo is public. Put it in your own `~/.claude/CLAUDE.md` instead.
+
 ## Layout
 
 ```
@@ -55,8 +68,10 @@ same flow and covers what makes a good `description`.
 plugins/
   zambon/                           # the plugin (add more dirs for more plugins)
     .claude-plugin/plugin.json      # plugin manifest — name, version, author
+    hooks/                          # SessionStart hook that loads the writing rules
     skills/
       new-skill/SKILL.md            # one directory per skill
+      writing-style/rules.md        # the always-on writing rules
 scripts/
   new-skill.sh                      # scaffold a skill
   dev-link.sh                       # symlink plugins into ~/.claude/skills
