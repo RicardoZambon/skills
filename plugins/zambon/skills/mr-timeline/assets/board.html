@@ -300,7 +300,8 @@
     const reasons = [entry.item.blocked, waitingOn.length ? `waits on ${waitingOn.map(nameOf).join(', ')}` : ''].filter(Boolean);
     if (reasons.length) entry.status = { cls: 's-blocked', key: 'blocked', label: `Blocked · ${reasons.join('; ')}` };
   }
-  const lanes = plan.lanes.map((lane) => {
+  // A stage with no MRs takes no column.
+  const lanes = plan.lanes.filter((lane) => lane.items?.length).map((lane) => {
     const items = lane.items.map((item) => entries.get(item.ref || item.external.ref));
     const done = items.filter((entry) => ['merged', 'closed'].includes(entry.status.key)).length;
     return { lane, items, done, complete: items.length > 0 && done === items.length };

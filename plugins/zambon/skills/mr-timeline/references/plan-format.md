@@ -40,7 +40,6 @@ that feature's `collected.json`. `feature`, `collect` and `lanes` are required.
           "note": "One sentence."
         }
       ],
-      "empty": "Shown when the lane has no items."
     }
   ],
   "folded": [{ "ref": "aresprism/contruent-frontend!2787", "note": "Merged into the !2775 branch." }],
@@ -62,9 +61,12 @@ that feature's `collected.json`. `feature`, `collect` and `lanes` are required.
   and `reviewersText` are shown as given.
 - `folded` and `next` are not shown on the page. Keep `folded` anyway: it records why a collected
   MR has no node, and the renderer refuses a plan that drops an MR silently.
+- Lanes are the stages, in this order: `planning`, `shared`, `backend`, `frontend`. Leave out a
+  stage with no MRs, or keep it empty; the page hides it either way. There is no Bugs lane.
 - `rows` (top level) are the horizontal lanes: work streams, such as
   `{ "id": "delivery", "title": "Feature delivery" }`, then one per follow-up or tech-debt stream
-  the user names (`{ "id": "debt", "title": "Tech debt", "subtitle": "CEPM-6628" }`). Each item
+  the user names (`{ "id": "debt", "title": "Tech debt", "subtitle": "CEPM-6628" }`). Bug MRs go in a
+  `{ "id": "bugs", "title": "Bugs" }` row, each in the stage of the repo it changes. Each item
   sets `row`; without one it goes to the first row. Add a row only when the user asks for it.
 - `blocked` on an item (a short reason) turns it red. An MR GitLab marks as blocked by an open MR
   turns red on its own. Use `blocked` for what GitLab cannot see: a pinned dev build, an ADR

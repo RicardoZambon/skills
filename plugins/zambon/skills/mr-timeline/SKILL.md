@@ -1,6 +1,6 @@
 ---
 name: mr-timeline
-description: Keep the user's daily merge board - one page showing every active feature's MRs across the GitLab repositories as a git-style graph, by stage (Planning, Shared packages, Backend, Frontend, Bugs) and work stream (feature delivery, tech debt), with blockers, review waves and waits. Use when the user asks to refresh or check the board, see where their MRs stand, add a feature or Jira key to it, close a feature, change which MR depends on which, add a tech-debt row or a not-yet-opened MR, or wants a status overview, timeline or kanban for their manager.
+description: Keep the user's daily merge board - one page showing every active feature's MRs across the GitLab repositories as a git-style graph, by stage (Planning, Shared packages, Backend, Frontend) and work stream (feature delivery, tech debt, bugs), with blockers, review waves and waits. Use when the user asks to refresh or check the board, see where their MRs stand, add a feature or Jira key to it, close a feature, change which MR depends on which, add a tech-debt row or a not-yet-opened MR, or wants a status overview, timeline or kanban for their manager.
 ---
 
 # Merge board
@@ -67,6 +67,8 @@ On a first publish, `icon: "timeline"`, then write the URL into `board.json`.
 
 ## How the page reads
 
+- Stages are Planning, Shared packages, Backend and Frontend. A stage with no MRs in a feature
+  takes no column. Bugs and tech debt are work streams: rows, added only when the feature has them.
 - One overview row per active feature: progress, merged, blocked, over a day, in review.
 - Per feature, a git-style graph: stages are columns, work streams are rows, each track is a grey
   rail, each MR a dot coloured by state with an icon before its name. Red line: must merge first.
