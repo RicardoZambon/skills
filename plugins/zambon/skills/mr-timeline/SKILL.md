@@ -54,9 +54,10 @@ build and check with every feature on the board.
 The published page needs a claude.ai sign-in the browser pane does not have. Serve the build
 folder with `serve.mjs` through a `preview_start` launch entry (never a Bash background job):
 `node "<skill>/scripts/serve.mjs" "<scratchpad>" 4517`, then open
-`http://localhost:4517/merge-board/index.html` at 1440 wide. Screenshot each feature. Check that no
-line crosses a label or dot that is not its own; measure with `javascript_tool` when a gap is too
-small to judge. Fix, look again, then publish.
+`http://localhost:4517/merge-board/index.html` at 1440 wide. Run `scripts/check-lines.js` in the
+pane with `javascript_tool`: every feature must report "no crossings". Then screenshot each
+feature and read it as the user would. A crossing is a view bug: fix it in `board.html`, never by
+moving data around to dodge it. Fix, check again, then publish.
 
 ## Publish
 

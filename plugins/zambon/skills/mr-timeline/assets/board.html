@@ -384,14 +384,18 @@
     const free = (column, track) => !taken.has(`${column}:${track}`);
     for (const entry of inRow) {
       let track = null;
+      // A blocker's rail with something in the way is off limits: landing on it would draw a
+      // straight line through the item in between.
+      const crowded = new Set();
       for (const blockerId of blockersOf(entry)) {
         const blocker = placed.get(blockerId);
         if (!blocker || blocker.column >= entry.column) continue;
         let clear = true;
         for (let column = blocker.column + 1; column <= entry.column; column++) if (!free(column, blocker.track)) clear = false;
         if (clear) { track = blocker.track; break; }
+        crowded.add(blocker.track);
       }
-      if (track === null) { track = 0; while (!free(entry.column, track)) track += 1; }
+      if (track === null) { track = 0; while (!free(entry.column, track) || crowded.has(track)) track += 1; }
       taken.add(`${entry.column}:${track}`);
       placed.set(entry.id, { column: entry.column, track });
       entry.track = track;
