@@ -1,0 +1,636 @@
+<title>Merge Board</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* Layout: a merge path. A stage rail on top, then one collapsible lane per stage, items in merge order. */
+  :root {
+    --bg: #f5f6f4;
+    --panel: #ffffff;
+    --ink: #1b2124;
+    --muted: #5d676c;
+    --line: #dfe3e1;
+    --accent: #1f6f78;
+    --accent-soft: #e2efef;
+    --ok: #2f7d4a;
+    --ok-soft: #e3f1e7;
+    --warn: #9a6512;
+    --warn-soft: #f8eedb;
+    --bad: #b03a2e;
+    --bad-soft: #f8e4e1;
+    --merged: #2756a8;
+    --merged-soft: #e1eaf8;
+    --wait: #7a5c00;
+    --wait-soft: #fbefc0;
+    --wait-mark: #d9a400;
+    --idle: #6f7a80;
+    --idle-soft: #eceeed;
+    --font-ui: 'Archivo', 'Segoe UI', system-ui, sans-serif;
+    --font-mono: 'IBM Plex Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #121618; --panel: #1a2023; --ink: #e6eaeb; --muted: #9aa5aa; --line: #2c3539;
+      --accent: #6cc0c8; --accent-soft: #1d3336; --ok: #77c48f; --ok-soft: #1c3124;
+      --warn: #e2b05c; --warn-soft: #3a2f1b; --bad: #ee8a7d; --bad-soft: #3d221f;
+      --merged: #8db3f0; --merged-soft: #1b2a45; --wait: #edc95a; --wait-soft: #392f12; --wait-mark: #e0b53a;
+      --idle: #9aa5aa; --idle-soft: #252c30; color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #121618; --panel: #1a2023; --ink: #e6eaeb; --muted: #9aa5aa; --line: #2c3539;
+    --accent: #6cc0c8; --accent-soft: #1d3336; --ok: #77c48f; --ok-soft: #1c3124;
+    --warn: #e2b05c; --warn-soft: #3a2f1b; --bad: #ee8a7d; --bad-soft: #3d221f;
+      --merged: #8db3f0; --merged-soft: #1b2a45; --wait: #edc95a; --wait-soft: #392f12; --wait-mark: #e0b53a;
+    --idle: #9aa5aa; --idle-soft: #252c30; color-scheme: dark;
+  }
+  body { background: var(--bg); color: var(--ink); font: 14px/1.5 var(--font-ui); }
+  .wrap {
+    max-width: 1480px; margin: 0 auto; padding-block: 28px 56px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    display: grid; gap: 22px;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  a:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+  .mono { font-family: var(--font-mono); font-size: 12.5px; }
+  .muted { color: var(--muted); }
+
+  header { display: grid; gap: 6px; }
+  .eyebrow { font: 500 12px/1 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  h1 { font-size: clamp(22px, 3.4vw, 30px); line-height: 1.15; margin: 0; font-weight: 700; text-wrap: balance; }
+  .lede { margin: 0; max-width: 68ch; color: var(--muted); }
+
+  .legend-item { display: inline-flex; align-items: center; gap: 6px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: var(--muted); }
+  .legend .line-key::before { content: ""; display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; background: var(--c); vertical-align: -1px; }
+
+  /* Board: a swimlane grid. Stages are vertical lanes, work streams (delivery, follow-ups) are
+     horizontal lanes, all divided by rules rather than boxes. A folded stage narrows to a strip. */
+  .board-scroll { min-width: 0; }
+  .board { display: grid; grid-template-columns: var(--cols); }
+  .corner { border-bottom: 1px solid var(--line); }
+  .col-head {
+    all: unset; box-sizing: border-box; cursor: pointer; display: grid; gap: 7px; align-content: start;
+    padding: 4px 22px 12px; border-left: 1px solid var(--line); border-bottom: 1px solid var(--line); min-width: 0;
+  }
+  .col-head:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .lane-top { display: flex; align-items: baseline; gap: 8px; }
+  .chev { font: 12px var(--font-mono); color: var(--muted); width: 12px; display: inline-block; transition: transform .15s; }
+  .col-head[aria-expanded="true"] .chev { transform: rotate(90deg); }
+  .lane-title { font-weight: 700; font-size: 15px; }
+  .lane-state { margin-left: auto; }
+  .lane-sub { color: var(--muted); font-size: 12.5px; }
+  .bar { height: 5px; border-radius: 3px; background: var(--idle-soft); overflow: hidden; display: flex; }
+  .bar i { display: block; height: 100%; }
+  .col-head.folded { padding: 6px 0 12px; justify-items: center; }
+  .col-head.folded .lane-top { writing-mode: vertical-rl; gap: 10px; align-items: center; }
+  .col-head.folded .lane-state { margin: 0; }
+  .col-head.folded .lane-sub, .col-head.folded .bar { display: none; }
+
+  .row-head { border-top: 1px solid var(--line); padding: 18px 0; display: flex; justify-content: center; align-items: flex-start; }
+  .row-head.first { border-top: 0; }
+  .row-label { writing-mode: vertical-rl; transform: rotate(180deg); display: flex; gap: 8px; align-items: center; white-space: nowrap; }
+  .row-title { font: 600 12px var(--font-mono); letter-spacing: .06em; text-transform: uppercase; }
+  .row-sub { font-size: 12px; color: var(--muted); }
+  /* A stage's rules sit on .cell, behind the cards; the cards sit on tracks in .slot. */
+  .cell { border-left: 1px solid var(--line); border-top: 1px solid var(--line); min-width: 0; padding: 16px 22px; z-index: 0; }
+  .cell.first { border-top: 0; }
+  .cell.folded > * { display: none; }
+  .slot { padding: 10px 22px 14px; min-width: 0; align-self: start; }
+  .slot.top { padding-top: 18px; }
+  .slot.bottom { padding-bottom: 20px; }
+  .slot.folded { display: none; }
+
+  .board-wrap { position: relative; }
+  .board { position: relative; z-index: 1; }
+  svg.links { position: absolute; inset: 0; z-index: 0; pointer-events: none; overflow: visible; }
+  .rail { stroke: var(--line); stroke-width: 3; stroke-linecap: round; }
+  .link { stroke-width: 3; stroke-linecap: round; transition: opacity .15s; }
+  .link-open { stroke: var(--bad); }
+  .link-done { stroke: var(--merged); opacity: .55; }
+  svg.links.focus .link { opacity: .12; }
+  svg.links.focus .link.on { opacity: 1; }
+  .legend .line-key::before { width: 18px; height: 3px; border-radius: 2px; background: var(--bad); vertical-align: 2px; }
+  .empty { margin: 0; padding: 4px 4px; color: var(--muted); font-size: 13px; }
+
+  /* A node: the dot sits on its track's rail; the label hangs below it. */
+  /* The gap under the dot leaves a band for a line forking downward. */
+  .node { display: grid; gap: 24px; min-width: 0; }
+  .dot { width: 16px; height: 16px; border-radius: 50%; background: var(--fg); box-shadow: 0 0 0 4px var(--bg); }
+  .dot.s-review, .dot.s-changes { background: var(--wait-mark); }
+  .dot.s-merged { background: var(--merged); }
+  .node-label { display: grid; gap: 5px; min-width: 0; padding-right: 6px; }
+  .ref { font: 500 12px var(--font-mono); }
+  .ref-line { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .icon { width: 15px; height: 15px; flex: none; fill: none; stroke: var(--fg); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .icon.s-review, .icon.s-changes { stroke: var(--wait-mark); }
+  .icon.alert { animation: alert-pulse 1.4s ease-in-out infinite; transform-origin: 50% 60%; }
+  @keyframes alert-pulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.3); opacity: .55; } }
+  @media (prefers-reduced-motion: reduce) { .icon.alert { animation: none; } }
+  .item-title { font-weight: 600; font-size: 13px; line-height: 1.35; overflow-wrap: anywhere; }
+  /* An MR not opened yet is planned work: faded, with its incoming lines faded too. */
+  .node.pending { opacity: .45; }
+  .link.link-pending { opacity: .3; }
+  .node.done .item-title { font-weight: 500; color: var(--muted); }
+  .note { margin: 0; color: var(--muted); font-size: 12px; }
+  .tags { display: flex; flex-wrap: wrap; gap: 5px; }
+
+  .pill { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 600; padding: 2px 8px; border-radius: 10px; max-width: 100%; overflow-wrap: anywhere; color: var(--fg); background: var(--bgc); }
+  .s-merged { --fg: var(--merged); --bgc: var(--merged-soft); }
+  .s-approved { --fg: var(--ok); --bgc: var(--ok-soft); }
+  .s-review { --fg: var(--wait); --bgc: var(--wait-soft); }
+  .s-changes { --fg: var(--wait); --bgc: var(--wait-soft); }
+  .s-blocked { --fg: var(--bad); --bgc: var(--bad-soft); }
+  .s-idle { --fg: var(--idle); --bgc: var(--idle-soft); }
+
+  .reviewers { display: flex; flex-wrap: wrap; gap: 3px 12px; font-size: 12px; }
+  .rv { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; color: var(--muted); }
+  .rv .mark { width: 7px; height: 7px; border-radius: 50%; background: var(--fg); flex: none; }
+  .rv.s-review .mark, .rv.s-changes .mark { background: var(--wait-mark); }
+  .rv .who { font-weight: 600; color: var(--ink); }
+  .rv .wait { font: 11.5px var(--font-mono); color: var(--fg); font-variant-numeric: tabular-nums; }
+
+  /* Overview: one line per feature, the thing to read first each morning. */
+  .overview { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .overview th { text-align: left; font: 500 11.5px var(--font-mono); letter-spacing: .05em; text-transform: uppercase; color: var(--muted); padding: 0 14px 8px 0; border-bottom: 1px solid var(--line); }
+  .overview td { padding: 9px 14px 9px 0; border-bottom: 1px solid var(--line); vertical-align: middle; font-variant-numeric: tabular-nums; }
+  .overview .bar { width: 140px; }
+  .count { display: inline-flex; align-items: center; gap: 5px; }
+  .count.zero { color: var(--muted); }
+  .count.zero .icon { opacity: .4; }
+  .overview-scroll { overflow-x: auto; }
+
+  .feature { border-top: 1px solid var(--line); padding-top: 18px; display: grid; gap: 16px; scroll-margin-top: 16px; }
+  .feature > summary { list-style: none; cursor: pointer; display: grid; gap: 6px; }
+  .feature > summary::-webkit-details-marker { display: none; }
+  .feature > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 4px; }
+  .feature h2 { font-size: clamp(19px, 2.6vw, 24px); margin: 0; font-weight: 700; display: flex; gap: 10px; align-items: baseline; }
+  .feature[open] > summary .chev { transform: rotate(90deg); }
+  .closed-group > summary { cursor: pointer; font-weight: 600; color: var(--muted); }
+  footer { font-size: 12px; color: var(--muted); display: grid; gap: 4px; }
+
+  @media (max-width: 760px) {
+    .board-scroll { overflow-x: auto; }
+    .board-wrap { min-width: 880px; }
+  }
+  @media (prefers-reduced-motion: reduce) { .chev { transition: none; } }
+</style>
+
+<div class="wrap" id="app"><p class="empty">Loading the board…</p></div>
+<script>
+(() => {
+  const esc = (text) => String(text ?? '').replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+  const colors = { merged: 'var(--merged)', approved: 'var(--ok)', review: 'var(--wait-mark)', changes: 'var(--wait-mark)', blocked: 'var(--bad)', draft: 'var(--idle)', pending: 'var(--idle)', closed: 'var(--idle)' };
+  const ICONS = {
+    merged: ['Merged', '<circle cx="12" cy="12" r="10" fill="var(--ok)" stroke="none"/><path d="m7.5 12.5 3 3 6-7" stroke="var(--bg)" stroke-width="2.5"/>'],
+    blocked: ['Blocked', '<path d="M7.86 2h8.28L22 7.86v8.28L16.14 22H7.86L2 16.14V7.86z"/><path d="M8 12h8"/>'],
+    late: ['Waiting on review for over a day', '<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/>'],
+    review: ['Waiting on review', '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>'],
+    changes: ['Changes requested, with the author', '<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>'],
+    approved: ['Approved', '<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>'],
+    idle: ['Draft or not opened', '<circle cx="12" cy="12" r="9" stroke-dasharray="3 3.2"/>']
+  };
+  const svgIcon = (key, cls, extra = '') => {
+    const [label, body] = ICONS[key];
+    return `<svg class="icon ${cls} ${extra}" viewBox="0 0 24 24" role="img" aria-label="${label}"><title>${label}</title>${body}</svg>`;
+  };
+  // The state icon goes before the repository name; a review wait past a day adds a pulsing
+  // warning after it, so the clock still says what kind of wait it is.
+  const iconFor = (status) => {
+    const key = ICONS[status.key] ? status.key : 'idle';
+    return svgIcon(key, key === 'merged' ? 's-approved' : status.cls);
+  };
+
+
+  // Draws one feature's board into root and returns its summary for the overview.
+  function renderFeature(root, data, plan) {
+  const asOf = new Date(data.collectedAt);
+  const alertFor = (status) => (status.key === 'review' && late(status.since) ? svgIcon('late', 's-blocked', 'alert') : '');
+
+  const hidden = new Set(plan.hideReviewers || []);
+  for (const mr of data.mrs) mr.reviewers = mr.reviewers.filter((rv) => !hidden.has(rv.username));
+  const byRef = new Map(data.mrs.map((mr) => [mr.ref, mr]));
+
+  // A review wait past this is shown in red.
+  const LATE_HOURS = 24;
+  const late = (iso) => Boolean(iso) && (asOf - new Date(iso)) / 36e5 > LATE_HOURS;
+  function ago(iso) {
+    if (!iso) return '';
+    const hours = (asOf - new Date(iso)) / 36e5;
+    if (hours < 1) return '<1 h';
+    if (Math.round(hours) < 24) return `${Math.round(hours)} h`;
+    const days = hours / 24;
+    if (days < 14) return `${Math.round(days)} d`;
+    return `${Math.round(days / 7)} w`;
+  }
+  const day = (iso) => (iso ? new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) : '');
+  const firstName = (rv) => (rv.name || rv.username).split(' ')[0];
+
+  // One status per item, from the facts. Order matters: terminal states first.
+  function mrStatus(mr) {
+    if (mr.state === 'merged') return { cls: 's-merged', key: 'merged', label: `Merged ${day(mr.mergedAt)}` };
+    if (mr.state === 'closed') return { cls: 's-idle', key: 'closed', label: 'Closed' };
+    if (mr.draft) return { cls: 's-idle', key: 'draft', label: 'Draft' };
+    // Reviewers who never started do not set the wave or the wait; they show on their own chip.
+    const engaged = mr.reviewers.filter((rv) => rv.rounds > 0 && rv.turn !== 'done');
+    const withAuthor = engaged.filter((rv) => rv.turn === 'author');
+    const waiting = mr.reviewers.filter((rv) => rv.turn === 'reviewer');
+    const approved = mr.reviewers.filter((rv) => rv.state === 'APPROVED').length;
+    const wave = Math.max(1, ...engaged.map((rv) => rv.wave));
+    const approvals = approved ? ` · ${approved} of ${mr.reviewers.length} approved` : '';
+    if (!waiting.length && !withAuthor.length) return { cls: 's-approved', key: 'approved', label: 'Approved' };
+    if (withAuthor.some((rv) => rv.state === 'REQUESTED_CHANGES')) {
+      const since = withAuthor.map((rv) => rv.waitingSince).sort().at(-1);
+      return { cls: 's-changes', key: 'changes', label: `Changes requested · wave ${wave}${approvals}`, wait: `with author ${ago(since)}`, since };
+    }
+    const active = waiting.filter((rv) => rv.rounds > 0);
+    const since = (active.length ? active : waiting).map((rv) => rv.waitingSince).sort()[0];
+    return { cls: 's-review', key: 'review', label: `In review · wave ${wave}${approvals}`, wait: `waiting ${ago(since)}`, since };
+  }
+
+  const shortWhat = (rv, what) => (rv.state === 'APPROVED' ? ' ✓' : /^Not started|^Did not/.test(what) ? ' · not started' : rv.turn === 'author' ? ` · w${rv.wave}, with author` : rv.rounds ? ` · w${rv.wave}` : '');
+  function reviewerChip(rv, mr) {
+    const open = mr.state === 'opened' && !mr.draft;
+    let cls; let what; let wait = '';
+    if (rv.state === 'APPROVED') { cls = 's-approved'; what = rv.rounds ? `Approved after wave ${rv.rounds}` : 'Approved'; }
+    else if (!open) { cls = 's-idle'; what = rv.rounds ? `${rv.rounds} wave${rv.rounds > 1 ? 's' : ''}` : 'Did not review'; }
+    else if (rv.turn === 'author') { cls = 's-changes'; what = rv.state === 'REQUESTED_CHANGES' ? `Changes requested · wave ${rv.wave}` : `Commented · wave ${rv.wave}`; wait = `author ${ago(rv.waitingSince)}`; }
+    else if (rv.rounds === 0) { cls = late(rv.waitingSince) ? 's-blocked' : 's-idle'; what = 'Not started'; wait = `waiting ${ago(rv.waitingSince)}`; }
+    else { cls = late(rv.waitingSince) ? 's-blocked' : 's-review'; what = `Reviewing · wave ${rv.wave}`; wait = `waiting ${ago(rv.waitingSince)}`; }
+    return `<span class="rv ${cls}" title="${esc(what)}"><span class="mark"></span><span class="who">${esc(firstName(rv))}</span>${esc(shortWhat(rv, what))}${wait ? ` <span class="wait">${esc(wait.replace(/^(waiting|author) /, ''))}</span>` : ''}</span>`;
+  }
+
+  function externalStatus(ext) {
+    if (ext.state === 'merged') return { cls: 's-merged', key: 'merged', label: `Merged ${day(ext.mergedAt)}` };
+    if (ext.state === 'closed') return { cls: 's-idle', key: 'closed', label: 'Closed' };
+    if (ext.state === 'pending') return { cls: 's-idle', key: 'pending', label: ext.statusLabel || 'Not opened yet' };
+    return { cls: 's-review', key: 'review', label: ext.statusLabel || 'Open', wait: ext.wait };
+  }
+
+  const rows = (plan.rows && plan.rows.length) ? plan.rows : [{ id: 'main', title: 'Delivery' }];
+  const rowOf = (item) => item.row || rows[0].id;
+  const entryOf = (item) => {
+    if (item.ref) {
+      const mr = byRef.get(item.ref);
+      return { id: mr.ref, item, mr, status: mrStatus(mr) };
+    }
+    return { id: item.external.ref, item, ext: item.external, status: externalStatus(item.external) };
+  };
+  const entries = new Map(plan.lanes.flatMap((lane) => lane.items.map(entryOf)).map((entry) => [entry.id, entry]));
+  const nameOf = (id) => {
+    const entry = entries.get(id);
+    if (entry?.mr) return `${entry.mr.repo} !${entry.mr.iid}`;
+    if (entry) return entry.id;
+    return id.split('/').at(-1);
+  };
+  for (const entry of entries.values()) {
+    const open = entry.mr ? entry.mr.state === 'opened' && !entry.mr.draft : !['merged', 'closed'].includes(entry.status.key);
+    if (!open) continue;
+    const waitingOn = [...new Set([
+      ...(entry.item.dependsOn || []).filter((id) => entries.has(id) && !['merged', 'closed'].includes(entries.get(id).status.key)),
+      ...(entry.mr ? entry.mr.blockedBy.filter((blocker) => blocker.state === 'opened').map((blocker) => blocker.reference) : [])
+    ])];
+    const reasons = [entry.item.blocked, waitingOn.length ? `waits on ${waitingOn.map(nameOf).join(', ')}` : ''].filter(Boolean);
+    if (reasons.length) entry.status = { cls: 's-blocked', key: 'blocked', label: `Blocked · ${reasons.join('; ')}` };
+  }
+  const lanes = plan.lanes.map((lane) => {
+    const items = lane.items.map((item) => entries.get(item.ref || item.external.ref));
+    const done = items.filter((entry) => ['merged', 'closed'].includes(entry.status.key)).length;
+    return { lane, items, done, complete: items.length > 0 && done === items.length };
+  });
+  let stepNo = 0;
+  for (const row of rows) {
+    for (const lane of lanes) {
+      for (const entry of lane.items.filter((candidate) => rowOf(candidate.item) === row.id)) {
+        stepNo += 1;
+        entry.step = entry.item.step ?? String(stepNo);
+      }
+    }
+  }
+
+  function itemHtml(entry) {
+    const { item, mr, ext, status } = entry;
+    const isDone = ['merged', 'closed'].includes(status.key);
+    const tags = [`<span class="pill ${status.cls}">${esc(status.label)}</span>`];
+    const blocked = status.key === 'blocked';
+    if (status.wait && !isDone && !blocked) tags.push(`<span class="pill ${status.key === 'review' && late(status.since) ? 's-blocked' : 's-idle'} mono">${esc(status.wait)}</span>`);
+    let head; let reviewers = '';
+    if (mr) {
+      if (!blocked && mr.state === 'opened' && mr.pipeline && mr.pipeline !== 'SUCCESS') tags.push(`<span class="pill ${mr.pipeline === 'FAILED' ? 's-blocked' : 's-idle'}">Pipeline ${esc(mr.pipeline.toLowerCase())}</span>`);
+      head = `<span class="ref-line">${iconFor(status)}<a class="ref" href="${esc(mr.url)}">${esc(mr.repo)} !${mr.iid}</a>${alertFor(status)}</span><span class="item-title">${esc(item.label || mr.title)}</span>`;
+      reviewers = mr.reviewers.length && !isDone && !blocked ? `<div class="reviewers">${mr.reviewers.map((rv) => reviewerChip(rv, mr)).join('')}</div>` : '';
+    } else {
+      head = `<span class="ref-line">${iconFor(status)}<a class="ref" href="${esc(ext.url)}">${esc(ext.ref)}</a>${alertFor(status)}</span><span class="item-title">${esc(ext.title)}</span>`;
+      if (ext.reviewersText && !blocked) reviewers = `<p class="note">${esc(ext.reviewersText)}</p>`;
+    }
+    const pending = ext?.state === 'pending';
+    return `<div class="node ${isDone ? 'done' : ''} ${pending ? 'pending' : ''}" data-node="${esc(entry.id)}" data-rail="${esc(entry.rail || '')}"><span class="dot ${status.cls}" title="${esc(status.label)}"></span><div class="node-label">
+      ${head}
+      <div class="tags">${tags.join('')}</div>
+      ${item.note ? `<p class="note">${esc(item.note)}</p>` : ''}
+      ${reviewers}</div></div>`;
+  }
+
+  const total = lanes.reduce((sum, lane) => sum + lane.items.length, 0);
+  const merged = lanes.reduce((sum, lane) => sum + lane.done, 0);
+  const feature = plan.feature || {};
+
+  const blockersOf = (entry) => [...(entry.item.dependsOn || []), ...(entry.mr ? entry.mr.blockedBy.map((blocker) => blocker.reference) : [])];
+  for (const lane of lanes) {
+    const depth = new Map();
+    const depthOf = (entry, seen = new Set()) => {
+      if (depth.has(entry.id)) return depth.get(entry.id);
+      if (seen.has(entry.id)) return 0;
+      seen.add(entry.id);
+      // Only a blocker still open pushes an item right; a finished chain takes no extra room.
+      const before = lane.items.filter((other) => rowOf(other.item) === rowOf(entry.item) && blockersOf(entry).includes(other.id) && !['merged', 'closed'].includes(other.status.key));
+      const value = before.length ? 1 + Math.max(...before.map((other) => depthOf(other, seen))) : 0;
+      depth.set(entry.id, value);
+      return value;
+    };
+    for (const entry of lane.items) entry.depth = depthOf(entry);
+    lane.width = Math.max(1, ...lane.items.map((entry) => entry.depth + 1));
+  }
+  const collapsed = lanes.map(({ items, complete }) => complete || !items.length);
+  // Grid line where each stage starts: 1 is the row label column.
+  const stageStart = [];
+  lanes.reduce((line, entry, index) => { stageStart[index] = line; return line + entry.width; }, 2);
+  const columns = () => ['40px', ...lanes.flatMap((entry, index) => (collapsed[index]
+    ? ['52px', ...Array(entry.width - 1).fill('0px')]
+    : Array(entry.width).fill('minmax(0, 1fr)')))].join(' ');
+  const laneState = ({ items, done, complete }) => (complete ? '<span class="pill s-merged lane-state">Done</span>'
+    : items.length === 0 ? '<span class="pill s-idle lane-state">Empty</span>'
+    : `<span class="pill ${items.some((entry) => entry.status.key === 'blocked') ? 's-blocked' : 's-review'} lane-state">${done}/${items.length} merged</span>`);
+  const heads = lanes.map((entry, index) => `<button type="button" class="col-head ${collapsed[index] ? 'folded' : ''}" data-lane="${index}" aria-expanded="${!collapsed[index]}" style="grid-column:${stageStart[index]} / span ${entry.width};grid-row:1">
+      <span class="lane-top"><span class="chev">▸</span><span class="lane-title">${esc(entry.lane.title)}</span>${laneState(entry)}</span>
+      <span class="lane-sub">${esc(entry.lane.subtitle || '')}</span>
+      <span class="bar">${entry.items.map((item) => `<i style="width:${100 / entry.items.length}%;background:${colors[item.status.key] || 'var(--idle)'}"></i>`).join('')}</span></button>`).join('');
+
+  // Tracks: an item takes its blocker's track when the way there is clear, so the arrow runs
+  // straight through empty space; otherwise the first free track in its column.
+  const allEntries = lanes.flatMap((entry, index) => entry.items.map((item) => ({ ...item, laneIndex: index })));
+  const byId = new Map(allEntries.map((entry) => [entry.id, entry]));
+  let gridRow = 2;
+  const body = rows.map((row, rowIndex) => {
+    const first = rowIndex === 0 ? 'first' : '';
+    const inRow = allEntries
+      .filter((entry) => rowOf(entry.item) === row.id)
+      .map((entry, order) => ({ ...entry, column: stageStart[entry.laneIndex] + entry.depth, order }))
+      .sort((left, right) => left.column - right.column || left.order - right.order);
+    const taken = new Set();
+    const placed = new Map();
+    const free = (column, track) => !taken.has(`${column}:${track}`);
+    for (const entry of inRow) {
+      let track = null;
+      for (const blockerId of blockersOf(entry)) {
+        const blocker = placed.get(blockerId);
+        if (!blocker || blocker.column >= entry.column) continue;
+        let clear = true;
+        for (let column = blocker.column + 1; column <= entry.column; column++) if (!free(column, blocker.track)) clear = false;
+        if (clear) { track = blocker.track; break; }
+      }
+      if (track === null) { track = 0; while (!free(entry.column, track)) track += 1; }
+      taken.add(`${entry.column}:${track}`);
+      placed.set(entry.id, { column: entry.column, track });
+      entry.track = track;
+      entry.rail = `${rowIndex}:${track}`;
+    }
+    const tracks = Math.max(1, ...inRow.map((entry) => entry.track + 1));
+    const top = gridRow;
+    gridRow += tracks;
+    const span = `grid-row:${top} / span ${tracks}`;
+    const label = `<div class="row-head ${first}" style="grid-column:1;${span}"><span class="row-label"><span class="row-title">${esc(row.title)}</span>${row.subtitle ? `<span class="row-sub">${esc(row.subtitle)}</span>` : ''}</span></div>`;
+    const cells = lanes.map((entry, index) => {
+      const empty = rowIndex === 0 && !entry.items.length ? `<p class="empty">${esc(entry.lane.empty || 'No merge requests in this stage.')}</p>` : '';
+      return `<div class="cell ${first} ${collapsed[index] ? 'folded' : ''}" data-lane="${index}" style="grid-column:${stageStart[index]} / span ${entry.width};${span}">${empty}</div>`;
+    }).join('');
+    const slots = inRow.map((entry) => {
+      const edge = `${entry.track === 0 ? 'top' : ''} ${entry.track === tracks - 1 ? 'bottom' : ''}`;
+      return `<div class="slot ${edge} ${collapsed[entry.laneIndex] ? 'folded' : ''}" data-lane="${entry.laneIndex}" style="grid-column:${entry.column};grid-row:${top + entry.track}">${itemHtml(entry)}</div>`;
+    }).join('');
+    return label + cells + slots;
+  }).join('');
+  const boardHtml = `<div class="corner" style="grid-column:1;grid-row:1"></div>${heads}${body}`;
+
+  root.innerHTML = `<div class="board-scroll"><div class="board-wrap"><svg class="links" aria-hidden="true"></svg><section class="board" style="--cols:${columns()}" aria-label="Stages in merge order">${boardHtml}</section></div></div>`;
+
+  // Connector lines: blocker card -> dependent card, from GitLab "blocked by" and the plan's dependsOn.
+  const nodeIds = new Set(lanes.flatMap((lane) => lane.items.map((entry) => entry.id)));
+  const doneIds = new Set(lanes.flatMap((lane) => lane.items.filter((entry) => ['merged', 'closed'].includes(entry.status.key)).map((entry) => entry.id)));
+  const edges = [];
+  const addEdge = (from, to) => {
+    if (from !== to && nodeIds.has(from) && nodeIds.has(to) && !edges.some((edge) => edge.from === from && edge.to === to)) edges.push({ from, to });
+  };
+  for (const lane of lanes) {
+    for (const entry of lane.items) {
+      for (const from of entry.item.dependsOn || []) addEdge(from, entry.id);
+      if (entry.mr) for (const blocker of entry.mr.blockedBy) addEdge(blocker.reference, entry.id);
+    }
+  }
+
+  const wrap = root.querySelector('.board-wrap');
+  const svg = root.querySelector('svg.links');
+  const NS = 'http://www.w3.org/2000/svg';
+  const cardOf = (id) => [...root.querySelectorAll('[data-node]')].find((el) => el.dataset.node === id);
+  const visible = (el) => el && el.getClientRects().length > 0;
+
+  function draw() {
+    const box = wrap.getBoundingClientRect();
+    svg.setAttribute('width', box.width);
+    svg.setAttribute('height', box.height);
+    svg.setAttribute('viewBox', `0 0 ${box.width} ${box.height}`);
+    svg.innerHTML = '';
+    const centre = (id) => {
+      const node = cardOf(id);
+      if (!visible(node)) return null;
+      const rect = node.querySelector('.dot').getBoundingClientRect();
+      return { x: rect.left + rect.width / 2 - box.left, y: rect.top + rect.height / 2 - box.top, rail: node.dataset.rail };
+    };
+    // Horizontal, vertical at x = gutter, horizontal again, with rounded corners.
+    const elbow = (x1, y1, gutter, x2, y2) => {
+      const down = y2 > y1 ? 1 : -1;
+      const r = Math.min(16, Math.abs(y2 - y1) / 2, Math.abs(gutter - x1) || 10, Math.abs(x2 - gutter) || 10);
+      const in1 = gutter > x1 ? 1 : -1;
+      const out2 = x2 > gutter ? 1 : -1;
+      return `M ${x1} ${y1} H ${gutter - in1 * r} Q ${gutter} ${y1} ${gutter} ${y1 + down * r} V ${y2 - down * r} Q ${gutter} ${y2} ${gutter + out2 * r} ${y2} H ${x2}`;
+    };
+    const line = (d, cls, from, to) => {
+      const path = document.createElementNS(NS, 'path');
+      path.setAttribute('d', d);
+      path.setAttribute('fill', 'none');
+      path.setAttribute('class', cls);
+      if (from) { path.dataset.from = from; path.dataset.to = to; }
+      svg.appendChild(path);
+    };
+
+    const rails = new Map();
+    for (const node of root.querySelectorAll('[data-node]')) {
+      const point = centre(node.dataset.node);
+      if (!point) continue;
+      if (!rails.has(point.rail)) rails.set(point.rail, []);
+      rails.get(point.rail).push(point);
+    }
+    for (const points of rails.values()) {
+      if (points.length < 2) continue;
+      const xs = points.map((point) => point.x);
+      line(`M ${Math.min(...xs)} ${points[0].y} H ${Math.max(...xs)}`, 'rail');
+    }
+
+    for (const edge of edges) {
+      const from = centre(edge.from);
+      const to = centre(edge.to);
+      if (!from || !to) continue;
+      // Change rails only in the gap between columns, never under a label.
+      const slotOf = (id) => cardOf(id).closest('.slot').getBoundingClientRect();
+      let d;
+      if (Math.abs(from.y - to.y) < 1) {
+        d = `M ${from.x} ${from.y} H ${to.x}`;
+      } else {
+        const source = slotOf(edge.from);
+        const target = slotOf(edge.to);
+        let gutter;
+        if (Math.abs(source.left - target.left) < 2) gutter = source.left + 8 - box.left;
+        else {
+          const between = (rail) => (rails.get(rail) || []).some((point) => point.x > from.x + 1 && point.x < to.x - 1);
+          gutter = (between(from.rail) && !between(to.rail) ? source.right : target.left) - box.left;
+        }
+        // A line that changes rail keeps off its neighbours at both ends: it leaves its dot on its own
+        // curve into the free band beside the rail, turns only in the gap between columns, and joins
+        // the target the same way. Without room for a band it runs on the rail, as before.
+        const band = (x1, x2, y, side) => {
+          if (x2 - x1 < 90) return 0;
+          let limit = side < 0 ? -Infinity : Infinity;
+          for (const label of root.querySelectorAll('.node-label')) {
+            const rect = label.getBoundingClientRect();
+            if (!rect.width || rect.right - box.left <= x1 || rect.left - box.left >= x2) continue;
+            const top = rect.top - box.top;
+            const bottom = rect.bottom - box.top;
+            if (side < 0 && bottom < y) limit = Math.max(limit, bottom);
+            if (side > 0 && top > y) limit = Math.min(limit, top);
+          }
+          const offset = Math.min(20, Math.abs(limit - y) - 10);
+          return offset >= 12 ? side * offset : 0;
+        };
+        const down = to.y > from.y ? 1 : -1;
+        const leave = band(from.x, gutter, from.y, down);
+        const arrive = band(gutter, to.x, to.y, -down);
+        const y1 = from.y + leave;
+        const y2 = to.y + arrive;
+        const r = Math.min(16, Math.abs(y2 - y1) / 2);
+        let path = `M ${from.x} ${from.y} `;
+        path += leave ? `C ${from.x + 28} ${from.y}, ${from.x + 28} ${y1}, ${from.x + 56} ${y1} ` : ``;
+        path += `H ${gutter - r} Q ${gutter} ${y1} ${gutter} ${y1 + down * r} V ${y2 - down * r} Q ${gutter} ${y2} ${gutter + r} ${y2} `;
+        path += arrive ? `H ${to.x - 56} C ${to.x - 28} ${y2}, ${to.x - 28} ${to.y}, ${to.x} ${to.y}` : `H ${to.x}`;
+        d = Math.abs(source.left - target.left) < 2 ? elbow(from.x, from.y, gutter, to.x, to.y) : path;
+      }
+      line(d, `link ${doneIds.has(edge.from) ? 'link-done' : 'link-open'} ${cardOf(edge.to)?.classList.contains('pending') ? 'link-pending' : ''}`, edge.from, edge.to);
+    }
+  }
+
+  // Hovering a card shows only its own lines.
+  wrap.addEventListener('mouseover', (event) => {
+    const card = event.target.closest('[data-node]');
+    const id = card?.dataset.node;
+    svg.classList.toggle('focus', Boolean(id));
+    for (const path of svg.querySelectorAll('path.link')) path.classList.toggle('on', Boolean(id) && (path.dataset.from === id || path.dataset.to === id));
+  });
+  wrap.addEventListener('mouseleave', () => svg.classList.remove('focus'));
+  const board = root.querySelector('.board');
+  for (const head of root.querySelectorAll('.col-head')) {
+    head.addEventListener('click', () => {
+      const index = Number(head.dataset.lane);
+      collapsed[index] = !collapsed[index];
+      head.classList.toggle('folded', collapsed[index]);
+      head.setAttribute('aria-expanded', String(!collapsed[index]));
+      for (const cell of root.querySelectorAll(`.cell[data-lane="${index}"], .slot[data-lane="${index}"]`)) cell.classList.toggle('folded', collapsed[index]);
+      board.style.setProperty('--cols', columns());
+      draw();
+    });
+  }
+  if ('ResizeObserver' in window) new ResizeObserver(() => draw()).observe(wrap);
+  window.addEventListener('resize', draw);
+  draw();
+  document.fonts?.ready.then(draw);
+
+  const all = lanes.flatMap((lane) => lane.items);
+  return {
+    draw,
+    merged: all.filter((entry) => ['merged', 'closed'].includes(entry.status.key)).length,
+    total: all.length,
+    blocked: all.filter((entry) => entry.status.key === 'blocked').length,
+    late: all.filter((entry) => entry.status.key === 'review' && late(entry.status.since)).length,
+    review: all.filter((entry) => ['review', 'changes'].includes(entry.status.key)).length,
+    keys: all.map((entry) => entry.status.key)
+  };
+  }
+
+  const LEGEND = [['merged', 's-merged', 'Merged'], ['review', 's-review', 'Waiting on review'], ['late', 's-blocked', 'Waiting over a day'], ['changes', 's-changes', 'Changes requested'], ['blocked', 's-blocked', 'Blocked'], ['approved', 's-approved', 'Approved'], ['idle', 's-idle', 'Draft or not opened']];
+  const legendHtml = `<div class="legend">${LEGEND.map(([key, cls, text]) => `<span class="legend-item">${key === 'late' ? iconFor({ key: 'review', cls: 's-review' }) + svgIcon('late', 's-blocked', 'alert') : iconFor({ key, cls })}${text}</span>`).join('')}<span class="line-key">Red line: must merge first, left to right. Hover an MR to see only its lines.</span></div>`;
+  const anchor = (key) => key.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  const count = (n, icon, label) => `<span class="count ${n ? '' : 'zero'}" title="${label}">${icon}${n}</span>`;
+
+  // The page: data comes only from board.json, published next to it. Nothing here names a feature.
+  async function boot() {
+    const app = document.getElementById('app');
+    let board;
+    try {
+      const res = await fetch('board.json', { cache: 'no-store' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      board = await res.json();
+    } catch (error) {
+      app.innerHTML = `<p class="empty">The board data could not be loaded (${esc(error.message)}). Publish board.json next to this page.</p>`;
+      return;
+    }
+    const features = board.features || [];
+    const active = features.filter((feature) => feature.status !== 'closed');
+    const closed = features.filter((feature) => feature.status === 'closed');
+    const section = (feature) => {
+      const info = feature.plan.feature || {};
+      return `<details class="feature" id="${anchor(feature.key)}" ${feature.status === 'closed' ? '' : 'open'}>
+        <summary><div class="eyebrow">${info.url ? `<a href="${esc(info.url)}">${esc(feature.key)}</a>` : esc(feature.key)} · ${esc(info.status || '')} · <span data-progress></span></div>
+          <h2><span class="chev">▸</span>${esc(info.title || feature.key)}</h2>${info.summary ? `<p class="lede">${esc(info.summary)}</p>` : ''}</summary>
+        <div class="feature-board"></div></details>`;
+    };
+    app.innerHTML = `
+      <header>
+        <div class="eyebrow">Daily merge board · data as of ${esc(new Date(board.generatedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }))}</div>
+        <h1>${esc(board.title || 'Merge board')}</h1>
+      </header>
+      <div class="overview-scroll"><table class="overview"><thead><tr><th>Feature</th><th>Progress</th><th>Merged</th><th>Blocked</th><th>Over a day</th><th>In review</th></tr></thead><tbody></tbody></table></div>
+      ${legendHtml}
+      ${active.map(section).join('')}
+      ${closed.length ? `<details class="closed-group"><summary>Closed features (${closed.length})</summary>${closed.map(section).join('')}</details>` : ''}
+      <footer>
+        <div>Wait times count from each feature's data time.</div>
+        <div>A wave is one review round: the reviewer's notes between two pushes by the author. "Waiting" means the author handed it back and the reviewer has not acted since.</div>
+      </footer>`;
+
+    const rows = [];
+    for (const feature of [...active, ...closed]) {
+      const details = document.getElementById(anchor(feature.key));
+      const info = feature.plan.feature || {};
+      let summary;
+      try {
+        summary = renderFeature(details.querySelector('.feature-board'), feature.data, feature.plan);
+      } catch (error) {
+        details.querySelector('.feature-board').innerHTML = `<p class="empty">This feature could not be drawn: ${esc(error.message)}</p>`;
+        continue;
+      }
+      details.addEventListener('toggle', summary.draw);
+      details.querySelector('[data-progress]').textContent = `${summary.merged} of ${summary.total} steps merged`;
+      if (feature.status === 'closed') continue;
+      rows.push(`<tr><td><a href="#${anchor(feature.key)}">${esc(feature.key)}</a> ${esc(info.title || '')}</td>
+        <td><span class="bar">${summary.keys.map((key) => `<i style="width:${100 / summary.keys.length}%;background:${colors[key] || 'var(--idle)'}"></i>`).join('')}</span></td>
+        <td>${summary.merged}/${summary.total}</td>
+        <td>${count(summary.blocked, svgIcon('blocked', 's-blocked'), 'Blocked')}</td>
+        <td>${count(summary.late, svgIcon('late', 's-blocked'), 'Waiting on review for over a day')}</td>
+        <td>${count(summary.review, svgIcon('review', 's-review'), 'In review or with the author')}</td></tr>`);
+    }
+    app.querySelector('.overview tbody').innerHTML = rows.join('') || '<tr><td colspan="6" class="muted">No active features.</td></tr>';
+    if (location.hash) document.getElementById(location.hash.slice(1))?.scrollIntoView();
+  }
+  boot();
+})();
+</script>
