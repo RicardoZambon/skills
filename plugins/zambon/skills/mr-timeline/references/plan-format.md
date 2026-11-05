@@ -53,6 +53,13 @@ that feature's `collected.json`. `feature`, `collect` and `lanes` are required.
   description names one of `keys`, by `author`, created after `since`; plus `include`, minus
   `exclude` (full refs).
 - `ref` must be a full reference present in the collected data.
+- An `external` item (an Azure DevOps ADR PR, say) can carry `reviewers`, entered from what the
+  user reports, in the collected shape: `{ "name", "state": "REVIEWED" | "APPROVED", "rounds",
+  "wave", "turn": "reviewer" | "author" | "done" | "held", "waitingSince": UTC ISO }`. A `held`
+  reviewer also names `heldBy` (e.g. "ADR-016"): they won't act until that item moves, so they
+  neither wait nor approve. The page then reads the item like an MR: status, wave, waits and the
+  over-a-day warning. Convert the user's local time to UTC. Without `reviewers`, `statusLabel`
+  and `reviewersText` are shown as given.
 - `folded` and `next` are not shown on the page. Keep `folded` anyway: it records why a collected
   MR has no node, and the renderer refuses a plan that drops an MR silently.
 - `rows` (top level) are the horizontal lanes: work streams, such as

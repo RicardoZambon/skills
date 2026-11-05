@@ -98,7 +98,7 @@
   .cell { border-left: 1px solid var(--line); border-top: 1px solid var(--line); min-width: 0; padding: 16px 22px; z-index: 0; }
   .cell.first { border-top: 0; }
   .cell.folded > * { display: none; }
-  .slot { padding: 10px 22px 14px; min-width: 0; align-self: start; }
+  .slot { padding: 10px 22px 14px; min-width: 0; align-self: start; position: relative; z-index: 1; }
   .slot.top { padding-top: 18px; }
   .slot.bottom { padding-bottom: 20px; }
   .slot.folded { display: none; }
@@ -129,7 +129,8 @@
   .icon.alert { animation: alert-pulse 1.4s ease-in-out infinite; transform-origin: 50% 60%; }
   @keyframes alert-pulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.3); opacity: .55; } }
   @media (prefers-reduced-motion: reduce) { .icon.alert { animation: none; } }
-  .item-title { font-weight: 600; font-size: 13px; line-height: 1.35; overflow-wrap: anywhere; }
+  .item-title { font-weight: 600; font-size: 13px; line-height: 1.35; overflow-wrap: anywhere; color: var(--ink); text-decoration: none; }
+  a.item-title:hover, a.ref:hover { text-decoration: underline; }
   /* An MR not opened yet is planned work: faded, with its incoming lines faded too. */
   .node.pending { opacity: .45; }
   .link.link-pending { opacity: .3; }
@@ -237,10 +238,12 @@
     const engaged = mr.reviewers.filter((rv) => rv.rounds > 0 && rv.turn !== 'done');
     const withAuthor = engaged.filter((rv) => rv.turn === 'author');
     const waiting = mr.reviewers.filter((rv) => rv.turn === 'reviewer');
+    const held = mr.reviewers.filter((rv) => rv.turn === 'held');
     const approved = mr.reviewers.filter((rv) => rv.state === 'APPROVED').length;
     const wave = Math.max(1, ...engaged.map((rv) => rv.wave));
     const approvals = approved ? ` · ${approved} of ${mr.reviewers.length} approved` : '';
-    if (!waiting.length && !withAuthor.length) return { cls: 's-approved', key: 'approved', label: 'Approved' };
+    if (!waiting.length && !withAuthor.length && !held.length) return { cls: 's-approved', key: 'approved', label: 'Approved' };
+    if (!waiting.length && !withAuthor.length) return { cls: 's-review', key: 'review', label: `Held · ${held.map((rv) => `${firstName(rv)} waits on ${rv.heldBy}`).join(', ')}${approvals}` };
     if (withAuthor.some((rv) => rv.state === 'REQUESTED_CHANGES')) {
       const since = withAuthor.map((rv) => rv.waitingSince).sort().at(-1);
       return { cls: 's-changes', key: 'changes', label: `Changes requested · wave ${wave}${approvals}`, wait: `with author ${ago(since)}`, since };
@@ -250,11 +253,12 @@
     return { cls: 's-review', key: 'review', label: `In review · wave ${wave}${approvals}`, wait: `waiting ${ago(since)}`, since };
   }
 
-  const shortWhat = (rv, what) => (rv.state === 'APPROVED' ? ' ✓' : /^Not started|^Did not/.test(what) ? ' · not started' : rv.turn === 'author' ? ` · w${rv.wave}, with author` : rv.rounds ? ` · w${rv.wave}` : '');
+  const shortWhat = (rv, what) => (rv.turn === 'held' ? ` · holds for ${rv.heldBy}` : rv.state === 'APPROVED' ? ' ✓' : /^Not started|^Did not/.test(what) ? ' · not started' : rv.turn === 'author' ? ` · w${rv.wave}, with author` : rv.rounds ? ` · w${rv.wave}` : '');
   function reviewerChip(rv, mr) {
     const open = mr.state === 'opened' && !mr.draft;
     let cls; let what; let wait = '';
-    if (rv.state === 'APPROVED') { cls = 's-approved'; what = rv.rounds ? `Approved after wave ${rv.rounds}` : 'Approved'; }
+    if (rv.turn === 'held') { cls = 's-idle'; what = `Holds until ${rv.heldBy} moves`; }
+    else if (rv.state === 'APPROVED') { cls = 's-approved'; what = rv.rounds ? `Approved after wave ${rv.rounds}` : 'Approved'; }
     else if (!open) { cls = 's-idle'; what = rv.rounds ? `${rv.rounds} wave${rv.rounds > 1 ? 's' : ''}` : 'Did not review'; }
     else if (rv.turn === 'author') { cls = 's-changes'; what = rv.state === 'REQUESTED_CHANGES' ? `Changes requested · wave ${rv.wave}` : `Commented · wave ${rv.wave}`; wait = `author ${ago(rv.waitingSince)}`; }
     else if (rv.rounds === 0) { cls = late(rv.waitingSince) ? 's-blocked' : 's-idle'; what = 'Not started'; wait = `waiting ${ago(rv.waitingSince)}`; }
@@ -263,6 +267,7 @@
   }
 
   function externalStatus(ext) {
+    if (ext.reviewers?.length && !['merged', 'closed', 'pending'].includes(ext.state)) return mrStatus({ state: 'opened', draft: false, reviewers: ext.reviewers });
     if (ext.state === 'merged') return { cls: 's-merged', key: 'merged', label: `Merged ${day(ext.mergedAt)}` };
     if (ext.state === 'closed') return { cls: 's-idle', key: 'closed', label: 'Closed' };
     if (ext.state === 'pending') return { cls: 's-idle', key: 'pending', label: ext.statusLabel || 'Not opened yet' };
@@ -319,11 +324,12 @@
     let head; let reviewers = '';
     if (mr) {
       if (!blocked && mr.state === 'opened' && mr.pipeline && mr.pipeline !== 'SUCCESS') tags.push(`<span class="pill ${mr.pipeline === 'FAILED' ? 's-blocked' : 's-idle'}">Pipeline ${esc(mr.pipeline.toLowerCase())}</span>`);
-      head = `<span class="ref-line">${iconFor(status)}<a class="ref" href="${esc(mr.url)}">${esc(mr.repo)} !${mr.iid}</a>${alertFor(status)}</span><span class="item-title">${esc(item.label || mr.title)}</span>`;
+      head = `<span class="ref-line">${iconFor(status)}<a class="ref" href="${esc(mr.url)}" target="_blank" rel="noopener">${esc(mr.repo)} !${mr.iid}</a>${alertFor(status)}</span><a class="item-title" href="${esc(mr.url)}" target="_blank" rel="noopener">${esc(item.label || mr.title)}</a>`;
       reviewers = mr.reviewers.length && !isDone && !blocked ? `<div class="reviewers">${mr.reviewers.map((rv) => reviewerChip(rv, mr)).join('')}</div>` : '';
     } else {
-      head = `<span class="ref-line">${iconFor(status)}<a class="ref" href="${esc(ext.url)}">${esc(ext.ref)}</a>${alertFor(status)}</span><span class="item-title">${esc(ext.title)}</span>`;
-      if (ext.reviewersText && !blocked) reviewers = `<p class="note">${esc(ext.reviewersText)}</p>`;
+      head = `<span class="ref-line">${iconFor(status)}<a class="ref" href="${esc(ext.url)}" target="_blank" rel="noopener">${esc(ext.ref)}</a>${alertFor(status)}</span><a class="item-title" href="${esc(ext.url)}" target="_blank" rel="noopener">${esc(ext.title)}</a>`;
+      if (ext.reviewers?.length && !isDone && !blocked) reviewers = `<div class="reviewers">${ext.reviewers.map((rv) => reviewerChip(rv, { state: 'opened', draft: false })).join('')}</div>`;
+      else if (ext.reviewersText && !blocked) reviewers = `<p class="note">${esc(ext.reviewersText)}</p>`;
     }
     const pending = ext?.state === 'pending';
     return `<div class="node ${isDone ? 'done' : ''} ${pending ? 'pending' : ''}" data-node="${esc(entry.id)}" data-rail="${esc(entry.rail || '')}"><span class="dot ${status.cls}" title="${esc(status.label)}"></span><div class="node-label">
