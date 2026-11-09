@@ -101,7 +101,10 @@
   .slot { padding: 10px 22px 14px; min-width: 0; align-self: start; position: relative; z-index: 1; }
   .slot.top { padding-top: 18px; }
   .slot.bottom { padding-bottom: 20px; }
-  .slot.folded { display: none; }
+  /* A folded stage keeps each MR's dot, so lines still run into and out of it. */
+  .slot.folded { padding-left: 18px; padding-right: 0; }
+  .slot.folded .node-label { display: none; }
+  .slot.folded.deep { display: none; }
 
   .board-wrap { position: relative; }
   .board { position: relative; z-index: 1; }
@@ -419,7 +422,7 @@
     }).join('');
     const slots = inRow.map((entry) => {
       const edge = `${entry.track === 0 ? 'top' : ''} ${entry.track === tracks - 1 ? 'bottom' : ''}`;
-      return `<div class="slot ${edge} ${collapsed[entry.laneIndex] ? 'folded' : ''}" data-lane="${entry.laneIndex}" style="grid-column:${entry.column};grid-row:${top + entry.track}">${itemHtml(entry)}</div>`;
+      return `<div class="slot ${edge} ${entry.depth ? 'deep' : ''} ${collapsed[entry.laneIndex] ? 'folded' : ''}" data-lane="${entry.laneIndex}" style="grid-column:${entry.column};grid-row:${top + entry.track}">${itemHtml(entry)}</div>`;
     }).join('');
     return label + cells + slots;
   }).join('');
