@@ -75,6 +75,8 @@ that feature's `collected.json`. `feature`, `collect` and `lanes` are required.
   this card: red while the blocker is open, faint dashed blue once it merged. GitLab's own
   "blocked by" links are drawn without being listed. Take dependencies from the MR descriptions
   ("must not merge before", "pins a dev build of", "after"), not from guesses.
+- `ignoreBlockedBy` on an item (MR refs) drops those GitLab "blocked by" links from its lines and
+  status, when the user says the real dependency is another MR. Put the real one in `dependsOn`.
 - `omit` (top level, full refs) leaves collected MRs off the page entirely, when the user asks to
   remove one. Use `folded` instead when it was merged into another MR or closed.
 - `hideReviewers` (top level, usernames) drops those reviewers from the page and from the wave and

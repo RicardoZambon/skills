@@ -293,12 +293,14 @@
     if (entry) return entry.id;
     return id.split('/').at(-1);
   };
+  // GitLab 'blocked by' links, minus any the plan marks as not a real merge-order dependency.
+  const gitlabBlockers = (entry) => (entry.mr ? entry.mr.blockedBy.filter((blocker) => !(entry.item.ignoreBlockedBy || []).includes(blocker.reference)) : []);
   for (const entry of entries.values()) {
     const open = entry.mr ? entry.mr.state === 'opened' && !entry.mr.draft : !['merged', 'closed'].includes(entry.status.key);
     if (!open) continue;
     const waitingOn = [...new Set([
       ...(entry.item.dependsOn || []).filter((id) => entries.has(id) && !['merged', 'closed'].includes(entries.get(id).status.key)),
-      ...(entry.mr ? entry.mr.blockedBy.filter((blocker) => blocker.state === 'opened').map((blocker) => blocker.reference) : [])
+      ...gitlabBlockers(entry).filter((blocker) => blocker.state === 'opened').map((blocker) => blocker.reference)
     ])];
     const reasons = [entry.item.blocked, waitingOn.length ? `waits on ${waitingOn.map(nameOf).join(', ')}` : ''].filter(Boolean);
     if (reasons.length) entry.status = { cls: 's-blocked', key: 'blocked', label: `Blocked · ${reasons.join('; ')}` };
@@ -347,7 +349,7 @@
   const merged = lanes.reduce((sum, lane) => sum + lane.done, 0);
   const feature = plan.feature || {};
 
-  const blockersOf = (entry) => [...(entry.item.dependsOn || []), ...(entry.mr ? entry.mr.blockedBy.map((blocker) => blocker.reference) : [])];
+  const blockersOf = (entry) => [...(entry.item.dependsOn || []), ...gitlabBlockers(entry).map((blocker) => blocker.reference)];
   for (const lane of lanes) {
     const depth = new Map();
     const depthOf = (entry, seen = new Set()) => {
@@ -440,7 +442,7 @@
   for (const lane of lanes) {
     for (const entry of lane.items) {
       for (const from of entry.item.dependsOn || []) addEdge(from, entry.id);
-      if (entry.mr) for (const blocker of entry.mr.blockedBy) addEdge(blocker.reference, entry.id);
+      for (const blocker of gitlabBlockers(entry)) addEdge(blocker.reference, entry.id);
     }
   }
 
@@ -501,6 +503,10 @@
       let d;
       if (Math.abs(from.y - to.y) < 1) {
         d = `M ${from.x} ${from.y} H ${to.x}`;
+      } else if (to.x < from.x - 1) {
+        // A backward line (a later stage must merge first) turns in the gap on its source column's left
+        // edge and joins the target along the target's own rail, so it never runs over the source rail's dots.
+        d = elbow(from.x, from.y, slotOf(edge.from).left - box.left, to.x, to.y);
       } else {
         const source = slotOf(edge.from);
         const target = slotOf(edge.to);
