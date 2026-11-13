@@ -462,7 +462,7 @@
       const node = cardOf(id);
       if (!visible(node)) return null;
       const rect = node.querySelector('.dot').getBoundingClientRect();
-      return { x: rect.left + rect.width / 2 - box.left, y: rect.top + rect.height / 2 - box.top, rail: node.dataset.rail };
+      return { x: rect.left + rect.width / 2 - box.left, y: rect.top + rect.height / 2 - box.top, rail: node.dataset.rail, id };
     };
     // Horizontal, vertical at x = gutter, horizontal again, with rounded corners.
     const elbow = (x1, y1, gutter, x2, y2) => {
@@ -489,9 +489,14 @@
       rails.get(point.rail).push(point);
     }
     for (const points of rails.values()) {
-      if (points.length < 2) continue;
-      const xs = points.map((point) => point.x);
-      line(`M ${Math.min(...xs)} ${points[0].y} H ${Math.max(...xs)}`, 'rail');
+      // A rail joins two neighbouring dots only when one depends on the other, so an unlinked
+      // stretch never reads as a dependency.
+      const sorted = [...points].sort((one, other) => one.x - other.x);
+      for (let index = 1; index < sorted.length; index++) {
+        const [left, right] = [sorted[index - 1], sorted[index]];
+        const linked = edges.some((edge) => (edge.from === left.id && edge.to === right.id) || (edge.from === right.id && edge.to === left.id));
+        if (linked) line(`M ${left.x} ${left.y} H ${right.x}`, 'rail');
+      }
     }
 
     for (const edge of edges) {
